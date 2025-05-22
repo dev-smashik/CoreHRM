@@ -1,0 +1,339 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User and Authentication
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  name           String
+  password       String?
+  role           Role             @default(LIMITED)
+  department     String?
+  position       String?
+  avatar         String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  employee       Employee?
+  notifications  Notification[]
+  activities     Activity[]
+  leaveRequests  LeaveRequest[]   @relation("RequestedBy")
+  approvedLeaves LeaveRequest[]   @relation("ApprovedBy")
+  documents      Document[]
+  trainings      TrainingStatus[]
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  HR
+  LIMITED
+}
+
+// Employee Management
+model Employee {
+  id                String              @id @default(cuid())
+  userId            String              @unique
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeId        String              @unique
+  firstName         String
+  lastName          String
+  email             String              @unique
+  phone             String?
+  address           String?
+  dateOfBirth       DateTime?
+  dateOfHire        DateTime
+  departmentId      String
+  department        Department          @relation(fields: [departmentId], references: [id])
+  position          String
+  status            EmployeeStatus      @default(ACTIVE)
+  emergencyContact  String?
+  salary            Float?
+  performanceScore  Float?
+  manager           Employee?           @relation("EmployeeToManager", fields: [managerId], references: [id])
+  managerId         String?
+  directReports     Employee[]          @relation("EmployeeToManager")
+  attendanceRecords AttendanceRecord[]
+  leaveRequests     LeaveRequest[]
+  skills            EmployeeSkill[]
+  certifications    EmployeeCertification[]
+  careerPlans       CareerPlan[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+  SUSPENDED
+}
+
+model Department {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  employees   Employee[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// Attendance Management
+model AttendanceRecord {
+  id         String    @id @default(cuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime  @default(now())
+  checkIn    DateTime?
+  checkOut   DateTime?
+  status     AttendanceStatus @default(PRESENT)
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  ON_LEAVE
+  HALF_DAY
+}
+
+model LeaveRequest {
+  id             String       @id @default(cuid())
+  employeeId     String
+  employee       Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requestedById  String
+  requestedBy    User         @relation("RequestedBy", fields: [requestedById], references: [id])
+  type           LeaveType
+  startDate      DateTime
+  endDate        DateTime
+  duration       Float        // In days
+  reason         String?
+  status         LeaveStatus  @default(PENDING)
+  approvedById   String?
+  approvedBy     User?        @relation("ApprovedBy", fields: [approvedById], references: [id])
+  approvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+enum LeaveType {
+  VACATION
+  SICK
+  PERSONAL
+  MATERNITY
+  PATERNITY
+  BEREAVEMENT
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// Professional Development
+model Training {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  type        TrainingType     @default(COURSE)
+  category    String?
+  isRequired  Boolean          @default(false)
+  dueDate     DateTime?
+  content     String?
+  status      TrainingStatus[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+enum TrainingType {
+  COURSE
+  WORKSHOP
+  WEBINAR
+  CERTIFICATION
+  CONFERENCE
+}
+
+model TrainingStatus {
+  id          String        @id @default(cuid())
+  trainingId  String
+  training    Training      @relation(fields: [trainingId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      CompletionStatus @default(NOT_STARTED)
+  progress    Float         @default(0) // Percentage
+  startedAt   DateTime?
+  completedAt DateTime?
+  score       Float?
+  feedback    String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum CompletionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model Skill {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  category    String
+  description String?
+  employees   EmployeeSkill[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model EmployeeSkill {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  skillId     String
+  skill       Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  proficiency Float     // 0-100 scale
+  verified    Boolean   @default(false)
+  verifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([employeeId, skillId])
+}
+
+model Certification {
+  id              String                @id @default(cuid())
+  name            String                @unique
+  issuingBody     String
+  description     String?
+  validityPeriod  Int?                  // In months
+  employees       EmployeeCertification[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+}
+
+model EmployeeCertification {
+  id              String        @id @default(cuid())
+  employeeId      String
+  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  certificationId String
+  certification   Certification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+  issueDate       DateTime
+  expiryDate      DateTime?
+  certificateUrl  String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([employeeId, certificationId])
+}
+
+model CareerPlan {
+  id              String    @id @default(cuid())
+  employeeId      String
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  currentRole     String
+  targetRole      String
+  progress        Float     @default(0) // Percentage
+  startDate       DateTime  @default(now())
+  targetDate      DateTime?
+  objectives      String?
+  nextReviewDate  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Document Management
+model Document {
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  category    DocumentCategory
+  fileUrl     String
+  fileType    String
+  fileSize    Int           // In bytes
+  uploadedById String
+  uploadedBy  User          @relation(fields: [uploadedById], references: [id])
+  isTemplate  Boolean       @default(false)
+  tags        String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum DocumentCategory {
+  POLICY
+  TEMPLATE
+  CHECKLIST
+  ONBOARDING
+  PERFORMANCE
+  COMPLIANCE
+  OFFBOARDING
+  OTHER
+}
+
+// Activity and Notifications
+model Activity {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action      String
+  description String?
+  entityType  String?
+  entityId    String?
+  createdAt   DateTime  @default(now())
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  message     String
+  isRead      Boolean   @default(false)
+  type        NotificationType @default(INFO)
+  link        String?
+  createdAt   DateTime  @default(now())
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ERROR
+  SUCCESS
+}
+
+// Settings
+model CompanySettings {
+  id                String    @id @default(cuid())
+  companyName       String
+  companyAddress    String?
+  companyEmail      String?
+  companyPhone      String?
+  companyWebsite    String?
+  fiscalYearStart   Int       @default(1) // Month (1-12)
+  autoBackup        Boolean   @default(true)
+  twoFactorAuth     Boolean   @default(false)
+  auditLogs         Boolean   @default(true)
+  dataRetention     Int       @default(7) // In years
+  defaultLanguage   String    @default("en-US")
+  dateFormat        String    @default("MM/DD/YYYY")
+  timeFormat        String    @default("12h")
+  timezone          String    @default("America/New_York")
+  currency          String    @default("USD")
+  multiLanguage     Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}

@@ -5,9 +5,9 @@ import { v4 as uuidv4 } from "uuid"
 
 import { authOptions } from "@/lib/auth"
 
-// Initialize S3 client
+// Initialize S3 client with fallback region
 const s3Client = new S3Client({
-  region: process.env.STORAGE_REGION || "",
+  region: process.env.STORAGE_REGION || "us-east-1", // Provide a default region
   credentials: {
     accessKeyId: process.env.STORAGE_ACCESS_KEY || "",
     secretAccessKey: process.env.STORAGE_SECRET_KEY || "",
@@ -16,6 +16,12 @@ const s3Client = new S3Client({
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate required environment variables
+    if (!process.env.STORAGE_REGION || !process.env.STORAGE_ACCESS_KEY || !process.env.STORAGE_SECRET_KEY || !process.env.STORAGE_BUCKET) {
+      console.error("Missing required AWS environment variables")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+    }
+
     // Check authentication
     const session = await getServerSession(authOptions)
 
@@ -41,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     // Upload to S3
     const command = new PutObjectCommand({
-      Bucket: process.env.STORAGE_BUCKET || "",
+      Bucket: process.env.STORAGE_BUCKET,
       Key: fileName,
       Body: buffer,
       ContentType: file.type,
